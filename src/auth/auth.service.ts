@@ -8,14 +8,14 @@ import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
 @Injectable()
 export class AuthService {
   constructor(private prisma: PrismaService) { }
-  async signup(dto: AuthDto) {
+  async signup(authDto: AuthDto) {
     // Thực hiện generate password hash
-    const hash = await argon.hash(dto.password);
+    const hash = await argon.hash(authDto.password);
     // Thực hiện lưu vào database
     try {
       const user = await this.prisma.user.create({
         data: {
-          email: dto.email,
+          email: authDto.email,
           hash,
         },
         select: {
@@ -39,9 +39,24 @@ export class AuthService {
     }
   }
 
-  signin() {
-    return {
-      msg: 'I am signed in!',
-    };
+  async signin(authDto: AuthDto) {
+    // Tìm ra user theo email
+    const user = await this.prisma.user.findUnique({
+      where: {
+        email: authDto.email,
+      },
+    });
+    // Nếu như không tìm thấy user
+    if (!user) {
+      throw new BadRequestException('Email không tồn tại');
+    }
+    // Kiểm tra password có đúng hay không
+    const valid = await argon.verify(user.hash, authDto.password);
+    if (!valid) {
+      throw new BadRequestException('Mật khẩu không đúng');
+    }
+    // Nếu như password đúng thì return user
+    delete user.hash;
+    return user;
   }
 }
